@@ -1,0 +1,7 @@
+# Word formula to MathType (MathML/LaTeX) conversion
+lxml>=4.9.0,<6
+docx-equation @ git+https://github.com/zlqm/docx-equation.git@master
+
+# Tests
+pytest>=7.0.0
+pytest-cov>=4.0.0

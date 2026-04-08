@@ -1,0 +1,76 @@
+# ===== Python (backend) =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Test / Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+
+# ===== Node.js (frontend-*) =====
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.next/
+out/
+.nuxt/
+.output/
+dist/
+
+# ===== IDE / Editor =====
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== Docker =====
+.docker/
+
+# ===== 项目数据 =====
+data/
+# 保留初始化数据（供质检使用）
+!data/使用说明.txt
+!data/高等数学公式示例.docx
+
+# 生成的结果文件
+*.xml
+*.html
+*.tex
+*.log
+!backend/README.md
+!README.md

@@ -1,0 +1,15 @@
+# Word 公式转 MathType 工具
+# 一键启动: docker-compose up --build -d
+# 查看初始化日志: docker-compose logs converter
+# 手动转换: docker-compose exec converter python run_convert.py /data/你的文档.docx -o /data --latex --html
+
+services:
+  converter:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: word-formula-to-mathtype:latest
+    container_name: word-formula-converter
+    volumes:
+      - ./data:/data
+    working_dir: /app
