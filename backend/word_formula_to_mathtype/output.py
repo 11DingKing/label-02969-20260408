@@ -9,21 +9,30 @@ from typing import List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
+def _extract_value(item: Tuple) -> Tuple[int, Optional[str]]:
+    """
+    从结果项中提取索引和值，兼容旧格式 (index, value) 和新格式 (index, value, format_type)。
+    """
+    if len(item) >= 3:
+        return item[0], item[1]
+    return item[0], item[1]
+
+
 def write_mathml_file(
-    results: List[Tuple[int, Optional[str]]],
+    results: List[Tuple],
     output_path: str,
     single_document: bool = True,
 ) -> None:
     """
     将 MathML 结果写入文件。
-    :param results: [(index, mathml_string or None), ...]
+    :param results: [(index, mathml_string or None), ...] 或 [(index, mathml_string or None, format_type), ...]
     :param output_path: 输出路径（.xml 或 .html）
     :param single_document: True 则输出一个 XML/HTML 包含所有公式；False 则按公式分文件
     """
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     suffix = path.suffix.lower()
-    valid_count = sum(1 for _, m in results if m)
+    valid_count = sum(1 for item in results if _extract_value(item)[1] is not None)
     logger.debug("写入 MathML 到 %s，共 %d 条有效公式", path, valid_count)
 
     if single_document:
@@ -33,7 +42,8 @@ def write_mathml_file(
             _write_mathml_xml(results, path)
     else:
         base = path.with_suffix("")
-        for i, mml in results:
+        for item in results:
+            i, mml = _extract_value(item)
             if mml is None:
                 continue
             out = Path(f"{base}_eq{i}.xml")
@@ -62,10 +72,15 @@ def _normalize_mml(mml: str) -> str:
 
 
 def _write_mathml_xml(
-    results: List[Tuple[int, Optional[str]]],
+    results: List[Tuple],
     path: Path,
 ) -> None:
-    valid = [(i, _normalize_mml(m)) for i, m in results if m]
+    valid = []
+    for item in results:
+        i, m = _extract_value(item)
+        if m is not None:
+            valid.append((i, _normalize_mml(m)))
+    
     if not valid:
         path.write_text(
             '<?xml version="1.0" encoding="UTF-8"?>\n<formulas count="0"/>\n',
@@ -117,10 +132,15 @@ footer { text-align: center; font-size: 0.75rem; color: #9ca3af; margin-top: 2re
 
 
 def _write_mathml_html(
-    results: List[Tuple[int, Optional[str]]],
+    results: List[Tuple],
     path: Path,
 ) -> None:
-    valid = [(i, _normalize_mml(m)) for i, m in results if m]
+    valid = []
+    for item in results:
+        i, m = _extract_value(item)
+        if m is not None:
+            valid.append((i, _normalize_mml(m)))
+    
     total = len(results)
     success = len(valid)
     parts = [
@@ -158,7 +178,7 @@ def _escape(s: str) -> str:
 
 
 def write_latex_file(
-    results: List[Tuple[int, Optional[str]]],
+    results: List[Tuple],
     output_path: str,
 ) -> None:
     """将 LaTeX 结果写入 .tex 或 .txt 文件（每个公式一行或带编号）。"""
@@ -166,7 +186,8 @@ def write_latex_file(
     path.parent.mkdir(parents=True, exist_ok=True)
     logger.debug("写入 LaTeX 到 %s，共 %d 条", path, len(results))
     lines = []
-    for idx, tex in results:
+    for item in results:
+        idx, tex = _extract_value(item)
         if tex is None:
             lines.append(f"% 公式 {idx}: (转换失败)")
         else:

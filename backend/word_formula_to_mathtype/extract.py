@@ -1,13 +1,18 @@
 # word_formula_to_mathtype/extract.py
 """
-从 .docx 中提取 OMML（Office Math Markup）公式。
+从 .docx 或 .doc 中提取 OMML（Office Math Markup）公式。
 .docx 本质为 ZIP，主内容在 word/document.xml 中，公式为 m:oMath 或 m:oMathPara 节点。
+.doc 格式需要先转换为 .docx 格式。
 """
 import logging
+import os
 import re
+import shutil
+import subprocess
+import tempfile
 import zipfile
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -117,4 +122,137 @@ def extract_omml_from_docx_with_positions(docx_path: str) -> List[Tuple[int, str
     :return: [(index, omml_xml), ...]
     """
     blocks = extract_omml_from_docx(docx_path)
+    return list(enumerate(blocks, start=1))
+
+
+def _convert_doc_to_docx_libreoffice(doc_path: str, output_dir: str) -> Optional[str]:
+    """
+    使用 LibreOffice 将 .doc 转换为 .docx。
+    :param doc_path: 输入 .doc 文件路径
+    :param output_dir: 输出目录
+    :return: 转换后的 .docx 文件路径，失败返回 None
+    """
+    doc_path = Path(doc_path)
+    output_dir = Path(output_dir)
+    
+    try:
+        cmd = [
+            "libreoffice",
+            "--headless",
+            "--convert-to", "docx",
+            "--outdir", str(output_dir),
+            str(doc_path)
+        ]
+        
+        logger.info("使用 LibreOffice 转换 .doc 到 .docx: %s", doc_path)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+        
+        if result.returncode != 0:
+            logger.error("LibreOffice 转换失败: %s", result.stderr)
+            return None
+        
+        output_file = output_dir / f"{doc_path.stem}.docx"
+        if output_file.exists():
+            logger.info("转换成功: %s", output_file)
+            return str(output_file)
+        else:
+            logger.error("转换后文件不存在: %s", output_file)
+            return None
+            
+    except FileNotFoundError:
+        logger.error("未找到 LibreOffice，请确保已安装并添加到 PATH")
+        return None
+    except subprocess.TimeoutExpired:
+        logger.error("LibreOffice 转换超时")
+        return None
+    except Exception as e:
+        logger.error("转换 .doc 到 .docx 失败: %s", e)
+        return None
+
+
+def _convert_doc_to_docx(doc_path: str) -> Optional[str]:
+    """
+    将 .doc 文件转换为 .docx 格式。
+    优先使用 LibreOffice（跨平台）。
+    :param doc_path: 输入 .doc 文件路径
+    :return: 转换后的 .docx 文件路径（临时文件），失败返回 None
+    """
+    temp_dir = tempfile.mkdtemp(prefix="word_convert_")
+    
+    try:
+        result = _convert_doc_to_docx_libreoffice(doc_path, temp_dir)
+        if result:
+            return result
+        
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        return None
+        
+    except Exception:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
+
+
+def extract_omml_from_doc(doc_path: str) -> List[str]:
+    """
+    从 .doc 文件中提取所有 OMML 公式块。
+    先将 .doc 转换为 .docx，然后提取公式。
+    :param doc_path: Word 文档路径
+    :return: OMML XML 字符串列表
+    """
+    path = Path(doc_path)
+    if not path.exists():
+        logger.error("文件不存在: %s", doc_path)
+        raise FileNotFoundError(f"文件不存在: {doc_path}")
+    if path.suffix.lower() != ".doc":
+        logger.error("仅支持 .doc 格式: %s", path.suffix)
+        raise ValueError("仅支持 .doc 格式")
+    
+    logger.info("正在处理 .doc 文件: %s", path)
+    docx_path = _convert_doc_to_docx(doc_path)
+    
+    if not docx_path:
+        logger.error("无法将 .doc 转换为 .docx: %s", doc_path)
+        raise RuntimeError(f"无法将 .doc 转换为 .docx: {doc_path}")
+    
+    try:
+        blocks = extract_omml_from_docx(docx_path)
+        return blocks
+    finally:
+        docx_path_obj = Path(docx_path)
+        if docx_path_obj.exists():
+            temp_dir = docx_path_obj.parent
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def extract_omml_from_file(file_path: str) -> List[str]:
+    """
+    从 Word 文件中提取所有 OMML 公式块。
+    自动识别 .docx 或 .doc 格式。
+    :param file_path: Word 文档路径
+    :return: OMML XML 字符串列表
+    """
+    path = Path(file_path)
+    suffix = path.suffix.lower()
+    
+    if suffix == ".docx":
+        return extract_omml_from_docx(file_path)
+    elif suffix == ".doc":
+        return extract_omml_from_doc(file_path)
+    else:
+        logger.error("不支持的文件格式: %s", suffix)
+        raise ValueError(f"不支持的文件格式: {suffix}")
+
+
+def extract_omml_from_file_with_positions(file_path: str) -> List[Tuple[int, str]]:
+    """
+    从 Word 文件中提取 OMML，并返回在文档中的大致顺序索引（用于输出时编号）。
+    自动识别 .docx 或 .doc 格式。
+    :return: [(index, omml_xml), ...]
+    """
+    blocks = extract_omml_from_file(file_path)
     return list(enumerate(blocks, start=1))
